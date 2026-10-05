@@ -8,10 +8,10 @@ import json
 from typing import Any
 
 from classifier.llm_client import classify_with_llm
-from config.settings import ACTIONS, CATEGORIES, PRIORITIES
+from config.settings import ACTIONS, CATEGORIES, JOB_FOCUSES, PRIORITIES
 
 
-def _validate_classification(data: dict[str, Any]) -> dict[str, str | float]:
+def _validate_classification(data: dict[str, Any]) -> dict[str, str | float | None]:
     """
     Validate and normalize a classification dict from the LLM.
 
@@ -29,6 +29,13 @@ def _validate_classification(data: dict[str, Any]) -> dict[str, str | float]:
     if action not in ACTIONS:
         action = "review"
 
+    job_focus: str | None = data.get("job_focus")
+    if category == "job_offer":
+        if job_focus not in JOB_FOCUSES:
+            job_focus = "other"
+    else:
+        job_focus = None
+
     confidence = data.get("confidence", 0.5)
     try:
         confidence = max(0.0, min(1.0, float(confidence)))
@@ -41,6 +48,7 @@ def _validate_classification(data: dict[str, Any]) -> dict[str, str | float]:
 
     return {
         "category": category,
+        "job_focus": job_focus,
         "priority": priority,
         "recommended_action": action,
         "confidence": confidence,
@@ -48,7 +56,7 @@ def _validate_classification(data: dict[str, Any]) -> dict[str, str | float]:
     }
 
 
-def _parse_llm_response(raw: str) -> dict[str, str | float]:
+def _parse_llm_response(raw: str) -> dict[str, str | float | None]:
     """Parse raw LLM JSON text, returning fallback values on failure."""
     try:
         data = json.loads(raw)
@@ -59,7 +67,7 @@ def _parse_llm_response(raw: str) -> dict[str, str | float]:
     return _validate_classification({})
 
 
-def classify_email(email: dict[str, str]) -> dict[str, str | float]:
+def classify_email(email: dict[str, str]) -> dict[str, str | float | None]:
     """
     Classify a single parsed email and return an enriched dictionary.
 
@@ -70,15 +78,17 @@ def classify_email(email: dict[str, str]) -> dict[str, str | float]:
         email: Parsed email dict from ``fetch_unread_emails()``.
 
     Returns:
-        Enriched dict with ``category``, ``priority``, ``recommended_action``,
-        ``confidence``, and ``summary`` fields added.
+        Enriched dict with ``category``, ``job_focus``, ``priority``,
+        ``recommended_action``, ``confidence``, and ``summary``.
     """
     raw = classify_with_llm(email)
     classification = _parse_llm_response(raw)
     return {**email, **classification}
 
 
-def classify_emails(emails: list[dict[str, str]]) -> list[dict[str, str | float]]:
+def classify_emails(
+    emails: list[dict[str, str]],
+) -> list[dict[str, str | float | None]]:
     """
     Classify a batch of parsed emails sequentially.
 

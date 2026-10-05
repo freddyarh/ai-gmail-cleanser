@@ -29,8 +29,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-# Gmail read-only scope is sufficient for fetching and parsing messages.
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+# Modify scope: read mail plus labels, archive, and trash (Phase 3 actions).
+SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 CREDENTIALS_PATH = Path("credentials.json")
 TOKEN_PATH = Path("token.json")
 
@@ -79,6 +79,8 @@ def authenticate_gmail() -> Any:
 
     if TOKEN_PATH.exists():
         creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
+        if creds and not creds.has_scopes(SCOPES):
+            creds = None
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -99,12 +101,16 @@ def authenticate_gmail() -> Any:
     return build("gmail", "v1", credentials=creds)
 
 
-def fetch_unread_emails(max_results: int = 10) -> list[dict[str, str]]:
+def fetch_unread_emails(
+    max_results: int = 10,
+    service: Any | None = None,
+) -> list[dict[str, str]]:
     """
     Retrieve the most recent unread messages from the inbox.
 
     Args:
         max_results: Maximum number of unread messages to fetch (default: 10).
+        service: Optional pre-authenticated Gmail API service (Phase 3 reuse).
 
     Returns:
         A list of dictionaries, each containing ``id``, ``sender``,
@@ -113,7 +119,8 @@ def fetch_unread_emails(max_results: int = 10) -> list[dict[str, str]]:
     Raises:
         googleapiclient.errors.HttpError: If the Gmail API request fails.
     """
-    service = authenticate_gmail()
+    if service is None:
+        service = authenticate_gmail()
 
     list_response = (
         service.users()
