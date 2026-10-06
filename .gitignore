@@ -1,0 +1,11 @@
+# OAuth secrets — never commit these
+credentials.json
+token.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+logs/
